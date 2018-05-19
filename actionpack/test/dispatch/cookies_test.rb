@@ -289,6 +289,20 @@ class CookiesTest < ActionController::TestCase
       cookies[:user_name] = { value: "assain", expires: 2.hours }
       head :ok
     end
+
+    def encrypted_discount_and_user_id_cookie
+      cookies.encrypted[:user_id] = { value: 50, expires: 1.hour }
+      cookies.encrypted[:discount_percentage] = 10
+
+      head :ok
+    end
+
+    def signed_discount_and_user_id_cookie
+      cookies.signed[:user_id] = { value: 50, expires: 1.hour }
+      cookies.signed[:discount_percentage] = 10
+
+      head :ok
+    end
   end
 
   tests TestController
@@ -1274,6 +1288,8 @@ class CookiesTest < ActionController::TestCase
   end
 
   def test_signed_cookie_with_expires_set_relatively
+    request.env["action_dispatch.use_cookies_with_metadata"] = true
+
     cookies.signed[:user_name] = { value: "assain", expires: 2.hours }
 
     travel 1.hour
@@ -1284,6 +1300,8 @@ class CookiesTest < ActionController::TestCase
   end
 
   def test_encrypted_cookie_with_expires_set_relatively
+    request.env["action_dispatch.use_cookies_with_metadata"] = true
+
     cookies.encrypted[:user_name] = { value: "assain", expires: 2.hours }
 
     travel 1.hour
@@ -1298,6 +1316,60 @@ class CookiesTest < ActionController::TestCase
       get :cookie_expires_in_two_hours
       assert_cookie_header "user_name=assain; path=/; expires=Tue, 15 Aug 2017 02:00:00 -0000"
     end
+  end
+
+  def test_purpose_metadata_for_encrypted_cookies
+    get :encrypted_discount_and_user_id_cookie
+
+    cookies[:discount_percentage] = cookies[:user_id]
+    assert_equal 50, cookies.encrypted[:discount_percentage]
+
+    request.env["action_dispatch.use_cookies_with_metadata"] = true
+
+    get :encrypted_discount_and_user_id_cookie
+
+    cookies[:discount_percentage] = cookies[:user_id]
+    assert_nil cookies.encrypted[:discount_percentage]
+  end
+
+  def test_purpose_metadata_for_signed_cookies
+    get :signed_discount_and_user_id_cookie
+
+    cookies[:discount_percentage] = cookies[:user_id]
+    assert_equal 50, cookies.signed[:discount_percentage]
+
+    request.env["action_dispatch.use_cookies_with_metadata"] = true
+
+    get :signed_discount_and_user_id_cookie
+
+    cookies[:discount_percentage] = cookies[:user_id]
+    assert_nil cookies.signed[:discount_percentage]
+  end
+
+  def test_switch_off_metadata_for_encrypted_cookies_if_config_is_set_to_false
+    request.env["action_dispatch.use_cookies_with_metadata"] = false
+
+    get :encrypted_discount_and_user_id_cookie
+
+    travel 2.hours
+    assert_equal 50, cookies.encrypted[:user_id]
+
+    cookies[:discount_percentage] = cookies[:user_id]
+    assert_not_equal 10, cookies.encrypted[:discount_percentage]
+    assert_equal 50, cookies.encrypted[:discount_percentage]
+  end
+
+  def test_switch_off_metadata_for_signed_cookies_if_config_is_set_to_false
+    request.env["action_dispatch.use_cookies_with_metadata"] = false
+
+    get :signed_discount_and_user_id_cookie
+
+    travel 2.hours
+    assert_equal 50, cookies.signed[:user_id]
+
+    cookies[:discount_percentage] = cookies[:user_id]
+    assert_not_equal 10, cookies.signed[:discount_percentage]
+    assert_equal 50, cookies.signed[:discount_percentage]
   end
 
   private
