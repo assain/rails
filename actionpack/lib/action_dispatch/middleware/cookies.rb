@@ -81,6 +81,10 @@ module ActionDispatch
       get_header Cookies::COOKIES_ROTATIONS
     end
 
+    def cookies_with_purpose_metadata
+      get_header Cookies::COOKIES_WITH_PURPOSE_METADATA
+    end
+
     # :startdoc:
   end
 
@@ -182,6 +186,7 @@ module ActionDispatch
     COOKIES_SERIALIZER = "action_dispatch.cookies_serializer".freeze
     COOKIES_DIGEST = "action_dispatch.cookies_digest".freeze
     COOKIES_ROTATIONS = "action_dispatch.cookies_rotations".freeze
+    COOKIES_WITH_PURPOSE_METADATA = "action_dispatch.cookies_with_purpose_metadata".freeze
 
     # Cookies can typically store 4096 bytes.
     MAX_COOKIE_SIZE = 4096
@@ -470,7 +475,17 @@ module ActionDispatch
 
       def [](name)
         if data = @parent_jar[name.to_s]
-          parse name, data
+          if use_cookies_with_purpose_metadata?
+            value = parse name, data, purpose: name
+
+            if value.nil? && honor_cookies_without_metadata?
+              value = parse name, data
+            end
+
+            value
+          else
+            parse name, data
+          end
         end
       end
 
@@ -479,6 +494,10 @@ module ActionDispatch
           options.symbolize_keys!
         else
           options = { value: options }
+        end
+
+        if use_cookies_with_purpose_metadata?
+          options[:cookie_name] = name
         end
 
         commit(options)
@@ -494,6 +513,27 @@ module ActionDispatch
             { expires_in: options[:expires] }
           else
             { expires_at: options[:expires] }
+          end
+        end
+
+        def cookie_metadata(options)
+          metadata = expiry_options(options)
+          metadata[:purpose] = options[:cookie_name]
+
+          metadata
+        end
+
+        def use_cookies_with_purpose_metadata?
+          if request.cookies_with_purpose_metadata.is_a?(Hash)
+            request.cookies_with_purpose_metadata[:switch_on]
+          end
+        end
+
+        def honor_cookies_without_metadata?
+          deadline = request.cookies_with_purpose_metadata[:honor_cookies_without_metadata_till]
+
+          if deadline.is_a?(Time)
+            Time.now < deadline && use_cookies_with_purpose_metadata?
           end
         end
 
@@ -583,14 +623,14 @@ module ActionDispatch
       end
 
       private
-        def parse(name, signed_message)
+        def parse(name, signed_message, purpose: nil)
           deserialize(name) do |rotate|
-            @verifier.verified(signed_message, on_rotation: rotate)
+            @verifier.verified(signed_message, on_rotation: rotate, purpose: purpose)
           end
         end
 
         def commit(options)
-          options[:value] = @verifier.generate(serialize(options[:value]), expiry_options(options))
+          options[:value] = @verifier.generate(serialize(options[:value]), cookie_metadata(options))
 
           raise CookieOverflow if options[:value].bytesize > MAX_COOKIE_SIZE
         end
@@ -631,16 +671,16 @@ module ActionDispatch
       end
 
       private
-        def parse(name, encrypted_message)
+        def parse(name, encrypted_message, purpose: nil)
           deserialize(name) do |rotate|
-            @encryptor.decrypt_and_verify(encrypted_message, on_rotation: rotate)
+            @encryptor.decrypt_and_verify(encrypted_message, on_rotation: rotate, purpose: purpose)
           end
         rescue ActiveSupport::MessageEncryptor::InvalidMessage, ActiveSupport::MessageVerifier::InvalidSignature
           parse_legacy_signed_message(name, encrypted_message)
         end
 
         def commit(options)
-          options[:value] = @encryptor.encrypt_and_sign(serialize(options[:value]), expiry_options(options))
+          options[:value] = @encryptor.encrypt_and_sign(serialize(options[:value]), cookie_metadata(options))
 
           raise CookieOverflow if options[:value].bytesize > MAX_COOKIE_SIZE
         end

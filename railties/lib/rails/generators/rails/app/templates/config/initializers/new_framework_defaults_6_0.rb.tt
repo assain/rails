@@ -8,3 +8,16 @@
 
 # Don't force requests from old versions of IE to be UTF-8 encoded
 # Rails.application.config.action_view.default_enforce_utf8 = false
+#
+# Security of the Cookie System in Rails has been improved through the introduction
+# of purpose metadata for cookies so that the value of one cookie cannot be copied 
+# and used as the value of another, and trying to use a cookie for something it
+# wasn't meant for will fail.
+#
+# Also, cookies without metadata can be rejected immediately or can be given a deadline
+# before they're rejected so that your application behaviour is not broken immediately.
+#
+# Rails.application.config.action_dispatch.cookies_with_purpose_metadata = {
+# switch_on: true,
+# honor_cookies_wihout_metadata_till: 1.month.from_now
+# }

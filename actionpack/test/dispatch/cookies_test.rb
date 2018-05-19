@@ -1300,6 +1300,70 @@ class CookiesTest < ActionController::TestCase
     end
   end
 
+  def test_purpose_metadata_for_encrypted_cookies
+    cookies.encrypted[:discount_percentage] = 10
+    cookies.encrypted[:user_id] = 50
+
+    cookies[:discount_percentage] = cookies[:user_id]
+    assert_equal 50, cookies.encrypted[:discount_percentage]
+
+    request.env["action_dispatch.cookies_with_purpose_metadata"] = { switch_on: true }
+
+    cookies.encrypted[:discount_percentage] = 10
+    cookies.encrypted[:user_id] = 50
+
+    cookies[:discount_percentage] = cookies[:user_id]
+    assert_nil cookies.encrypted[:discount_percentage]
+  end
+
+  def test_purpose_metadata_for_signed_cookies
+    cookies.signed[:discount_percentage] = 10
+    cookies.signed[:user_id] = 50
+
+    cookies[:discount_percentage] = cookies[:user_id]
+    assert_equal 50, cookies.signed[:discount_percentage]
+
+    request.env["action_dispatch.cookies_with_purpose_metadata"] = { switch_on: true }
+
+    cookies.signed[:discount_percentage] = 10
+    cookies.signed[:user_id] = 50
+
+    cookies[:discount_percentage] = cookies[:user_id]
+    assert_nil cookies.signed[:discount_percentage]
+  end
+
+  def test_honor_encrypted_cookies_without_metadata
+    cookies.encrypted[:user_name] = "assain"
+    assert_equal "assain", cookies.encrypted[:user_name]
+
+    request.env["action_dispatch.cookies_with_purpose_metadata"] = { switch_on: true }
+    assert_nil cookies.encrypted[:user_name]
+
+    request.env["action_dispatch.cookies_with_purpose_metadata"][:honor_cookies_without_metadata_till] = 1.month.from_now
+
+    travel 10.days
+    assert_equal "assain", cookies.encrypted[:user_name]
+
+    travel 2.months
+    assert_nil cookies.encrypted[:user_name]
+  end
+
+  def test_honor_signed_cookies_without_metadata
+    cookies.signed[:user_name] = "assain"
+    assert_equal "assain", cookies.signed[:user_name]
+
+    request.env["action_dispatch.cookies_with_purpose_metadata"] = { switch_on: true }
+    assert_nil cookies.signed[:user_name]
+
+    request.env["action_dispatch.cookies_with_purpose_metadata"][:honor_cookies_without_metadata_till] = 1.month.from_now
+
+    travel 10.days
+    assert_equal "assain", cookies.signed[:user_name]
+
+    travel 2.months
+    assert_nil cookies.signed[:user_name]
+  end
+
   private
     def assert_cookie_header(expected)
       header = @response.headers["Set-Cookie"]

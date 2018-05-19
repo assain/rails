@@ -32,6 +32,11 @@ module ActionDispatch
       "Referrer-Policy" => "strict-origin-when-cross-origin"
     }
 
+    config.action_dispatch.cookies_with_purpose_metadata = {
+      switch_on: false,
+      honor_cookies_wihout_metadata_till: nil
+    }
+
     config.action_dispatch.cookies_rotations = ActiveSupport::Messages::RotationConfiguration.new
 
     config.eager_load_namespaces << ActionDispatch
